@@ -49,17 +49,22 @@ async def _validate_supabase_token(token: str) -> dict:
 async def _is_paid_user(user_id: str) -> bool:
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         return False
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{SUPABASE_URL}/rest/v1/paid_users",
-            headers={
-                "apikey": SUPABASE_SERVICE_ROLE_KEY,
-                "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
-            },
-            params={"user_id": f"eq.{user_id}", "select": "id"},
-        )
-        if resp.status_code == 200 and len(resp.json()) > 0:
-            return True
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{SUPABASE_URL}/rest/v1/paid_users",
+                headers={
+                    "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                },
+                params={"user_id": f"eq.{user_id}", "select": "id"},
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                rows = resp.json()
+                return isinstance(rows, list) and len(rows) > 0
+            return False
+    except Exception:
         return False
 
 @app.get("/health")
