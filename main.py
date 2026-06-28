@@ -97,15 +97,15 @@ async def verify(req: VerifyRequest):
 @app.post("/api/export")
 async def do_export(req: ExportRequest):
     parts = req.capability.split(":")
-    if len(parts) != 3:
+    if len(parts) != 4:
         raise HTTPException(status_code=400, detail="Malformed capability")
-    user_id, exp_str, sig = parts
+    user_id, exp_str, features, sig = parts
     exp = int(exp_str)
     if time.time() > exp:
         raise HTTPException(status_code=401, detail="Capability expired")
     expected_sig = _sign_data({
         "user_id": user_id,
-        "features": "paint,export",
+        "features": features,
         "exp": exp_str,
     })
     if not hmac.compare_digest(sig, expected_sig):
