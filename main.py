@@ -46,6 +46,22 @@ async def _validate_supabase_token(token: str) -> dict:
             raise HTTPException(status_code=401, detail="Invalid Supabase token")
         return resp.json()
 
+async def _is_paid_user(user_id: str) -> bool:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return False
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"{SUPABASE_URL}/rest/v1/paid_users",
+            headers={
+                "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+            },
+            params={"user_id": f"eq.{user_id}", "select": "id"},
+        )
+        if resp.status_code == 200 and len(resp.json()) > 0:
+            return True
+        return False
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -55,9 +71,13 @@ async def verify(req: VerifyRequest):
     user = await _validate_supabase_token(req.supabase_token)
     user_id = user.get("sub", "anonymous")
     email = user.get("email", None)
-    is_demo = email is None or email == ""
+    has_email = email is not None and email != ""
+    paid = False
+    if has_email and user_id != "anonymous":
+        paid = await _is_paid_user(user_id)
+    is_demo = not paid
     features = "paint"
-    if not is_demo:
+    if paid:
         features = "paint,export"
     exp = int(time.time()) + 3600
     capability_data = {
