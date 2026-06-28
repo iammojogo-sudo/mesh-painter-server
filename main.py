@@ -54,15 +54,20 @@ async def health():
 async def verify(req: VerifyRequest):
     user = await _validate_supabase_token(req.supabase_token)
     user_id = user.get("sub", "anonymous")
+    email = user.get("email", None)
+    is_demo = email is None or email == ""
+    features = "paint"
+    if not is_demo:
+        features = "paint,export"
     exp = int(time.time()) + 3600
     capability_data = {
         "user_id": user_id,
-        "features": "paint,export",
+        "features": features,
         "exp": str(exp),
     }
     sig = _sign_data(capability_data)
-    capability_token = f"{user_id}:{exp}:{sig}"
-    return {"capability": capability_token, "expires_at": exp}
+    capability_token = f"{user_id}:{exp}:{features}:{sig}"
+    return {"capability": capability_token, "expires_at": exp, "is_demo": is_demo}
 
 @app.post("/api/export")
 async def do_export(req: ExportRequest):
