@@ -7,14 +7,17 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import httpx
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("mesh-painter-api")
+logger = logging.getLogger("uvicorn")
 
 app = FastAPI(title="Mesh Painter API")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 HMAC_SECRET = os.environ.get("HMAC_SECRET", "")
+
+logger.info(f"Startup: SUPABASE_URL={'SET' if SUPABASE_URL else 'MISSING'}")
+logger.info(f"Startup: SUPABASE_SERVICE_ROLE_KEY={'SET' if SUPABASE_SERVICE_ROLE_KEY else 'MISSING'}")
+logger.info(f"Startup: HMAC_SECRET={'SET' if HMAC_SECRET else 'MISSING (using fallback)'}")
 
 if not HMAC_SECRET:
     HMAC_SECRET = hashlib.sha256(b"fallback-dev-only").hexdigest()
@@ -91,9 +94,12 @@ async def verify(req: VerifyRequest):
     user_id = user.get("sub", "anonymous")
     email = user.get("email", None)
     has_email = email is not None and email != ""
+    logger.info(f"verify: user_id={user_id} email={email} has_email={has_email}")
     paid = False
     if has_email and user_id != "anonymous":
         paid = await _is_paid_user(user_id, email)
+    else:
+        logger.info(f"verify: skipping paid check (reason: {'no email' if not has_email else 'anonymous user_id'})")
     is_demo = not paid
     features = "paint"
     if paid:
