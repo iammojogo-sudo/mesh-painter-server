@@ -40,7 +40,7 @@ def _sign_data(data: dict) -> str:
 
 async def _validate_supabase_token(token: str) -> dict:
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-        return {"sub": "anonymous", "email": None}
+        return {"id": "anonymous", "email": None}
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             f"{SUPABASE_URL}/auth/v1/user",
@@ -51,7 +51,9 @@ async def _validate_supabase_token(token: str) -> dict:
         )
         if resp.status_code != 200:
             raise HTTPException(status_code=401, detail="Invalid Supabase token")
-        return resp.json()
+        user = resp.json()
+        logger.info(f"Supabase /auth/v1/user response keys: {list(user.keys())}")
+        return user
 
 async def _is_paid_user(user_id: str, email: str = None) -> bool:
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
@@ -91,7 +93,7 @@ async def health():
 @app.post("/api/verify")
 async def verify(req: VerifyRequest):
     user = await _validate_supabase_token(req.supabase_token)
-    user_id = user.get("sub", "anonymous")
+    user_id = user.get("id") or user.get("sub", "anonymous")
     email = user.get("email", None)
     has_email = email is not None and email != ""
     logger.info(f"verify: user_id={user_id} email={email} has_email={has_email}")
