@@ -2,9 +2,13 @@ import os
 import hashlib
 import hmac
 import time
+import logging
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import httpx
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("mesh-painter-api")
 
 app = FastAPI(title="Mesh Painter API")
 
@@ -46,10 +50,13 @@ async def _validate_supabase_token(token: str) -> dict:
             raise HTTPException(status_code=401, detail="Invalid Supabase token")
         return resp.json()
 
-async def _is_paid_user(user_id: str) -> bool:
+async def _is_paid_user(user_id: str, email: str = None) -> bool:
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        logger.warning("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not configured")
         return False
     try:
+        params = {"user_id": f"eq.{user_id}", "select": "id,email,user_id"}
+        logger.info(f"Checking paid_users for user_id={user_id} email={email}")
         async with httpx.AsyncClient() as client:
             resp = await client.get(
                 f"{SUPABASE_URL}/rest/v1/paid_users",
@@ -57,14 +64,21 @@ async def _is_paid_user(user_id: str) -> bool:
                     "apikey": SUPABASE_SERVICE_ROLE_KEY,
                     "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
                 },
-                params={"user_id": f"eq.{user_id}", "select": "id"},
+                params=params,
                 timeout=10.0,
             )
+            logger.info(f"paid_users response: status={resp.status_code} body={resp.text[:500]}")
             if resp.status_code == 200:
                 rows = resp.json()
-                return isinstance(rows, list) and len(rows) > 0
+                if isinstance(rows, list) and len(rows) > 0:
+                    logger.info(f"Paid user found: {rows}")
+                    return True
+                logger.info(f"No matching row in paid_users for user_id={user_id}")
+                return False
+            logger.warning(f"paid_users query failed: {resp.status_code} {resp.text[:200]}")
             return False
-    except Exception:
+    except Exception as e:
+        logger.error(f"paid_users query exception: {e}")
         return False
 
 @app.get("/health")
@@ -79,7 +93,7 @@ async def verify(req: VerifyRequest):
     has_email = email is not None and email != ""
     paid = False
     if has_email and user_id != "anonymous":
-        paid = await _is_paid_user(user_id)
+        paid = await _is_paid_user(user_id, email)
     is_demo = not paid
     features = "paint"
     if paid:
