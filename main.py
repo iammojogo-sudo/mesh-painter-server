@@ -11,7 +11,7 @@ logger = logging.getLogger("uvicorn")
 
 app = FastAPI(title="Mesh Painter API")
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 HMAC_SECRET = os.environ.get("HMAC_SECRET", "")
 
